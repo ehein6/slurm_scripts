@@ -61,9 +61,14 @@ def get_phi_names():
     """Not implemented"""
     return []
 
-def get_gres_conf():
-    """Return a list of lines for this node's gres.conf"""
-    template = "NodeName={hostname} Name=gpu Type={type} File={file}"
+def get_gres_conf(include_gpu_types=False):
+    """Return a list of lines for this node's gres.conf
+
+       include_gpu_types: Emit the type field for each gpu.
+    """
+    template = "NodeName={hostname} Name=gpu File={file}"
+    if include_gpu_types:
+        template += " Type={type}"
     gpu_list = get_gpu_names()
     out_lines = []
     for n, line in enumerate(gpu_list):
@@ -75,21 +80,25 @@ def get_gres_conf():
         out_lines.append(template.format(**data))
     return "\n".join(out_lines)
 
-def get_gres_desc():
+def get_gres_desc(include_gpu_types=False):
     """Return a string describing the generic resources available in this node,
 
        This fills the Gres field in slurm.conf for this node.
     """
     tokens = []
     gpus = get_gpu_names()
-    for gpu_type, group in itertools.groupby(sorted(gpus)):
-        tokens.append("gpu:{}:{}".format(gpu_type, len(list(group))))
+    if include_gpu_types:
+        for gpu_type, group in itertools.groupby(sorted(gpus)):
+            tokens.append("gpu:{}:{}".format(gpu_type, len(list(group))))
+    else:
+        tokens.append("gpu:{}".format(len(gpus)))
+
     if len(tokens) == 0:
         return ""
     else:
         return "Gres=" + ",".join(tokens)
 
-def get_slurm_conf():
+def get_slurm_conf(include_gpu_types=False):
     """Return a line describing this node's resources to put in slurm.conf"""
     cpu_info = get_cpu_info()
     data = {
@@ -100,7 +109,7 @@ def get_slurm_conf():
         "cores_per_socket" : cpu_info["cores"] / cpu_info["sockets"],
         "num_sockets" : cpu_info["sockets"],
         "memory" : get_mem_info(),
-        "gres" : get_gres_desc(),
+        "gres" : get_gres_desc(include_gpu_types),
     }
     template = oneline("""\
         NodeName={hostname}
@@ -117,7 +126,11 @@ def get_slurm_conf():
 
 if __name__ == "__main__":
     hostname = get_hostname()
-    with open("{}-slurm.conf".format(hostname), "w") as f:
-        f.write(get_slurm_conf() + "\n")
-    with open("{}-gres.conf".format(hostname), "w") as f:
-        f.write(get_gres_conf() + "\n")
+    include_gpu_types = False
+    print get_slurm_conf(include_gpu_types)
+    print get_gres_conf(include_gpu_types)
+
+    # with open("{}-slurm.conf".format(hostname), "w") as f:
+    #     f.write(get_slurm_conf() + "\n")
+    # with open("{}-gres.conf".format(hostname), "w") as f:
+    #     f.write(get_gres_conf() + "\n")
