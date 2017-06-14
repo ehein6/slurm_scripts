@@ -9,8 +9,37 @@ def max_in_col(data, col_id):
     return max(int(row[col_id]) for row in data)
 
 def oneline(s):
-    """Converts a multi-line string to one line"""
+    """Converts a multi-line string to one line and removes extra spaces"""
     return re.sub("[\s]+", " ", s).strip()
+
+def get_short_intel_model_name(model):
+    """Shortens a full Intel processor description"""
+    # Clean up text before matching
+    model = re.sub("CPU", "", model)
+    model = oneline(model)
+    m = re.match("Intel\(R\) ([\w]+)\(\w+\) ([\w\d-]+\s?[\w\d]*) @ \d+[.]\d+\w+", model)
+    if m:
+        family = m.group(1)
+        number = m.group(2)
+        # HACK: cpuinfo sometimes includes a 0 in place of the version number that we don't care about
+        if number.endswith(" 0"):
+            number = number[:-2]
+        number = number.replace(" ", "")
+        model = family + "-" + number
+    return model
+
+def get_cpu_model():
+    text = subprocess.check_output(["cat", "/proc/cpuinfo"])
+    for line in text.splitlines():
+        # Look for model name
+        if line.startswith("model name"):
+            # Grab processor description
+            model = line.split(":")[1]
+            if model.startswith(" Intel"):
+                return get_short_intel_model_name(model)
+            # TODO parse Power8
+            else:
+                return model
 
 def get_cpu_info():
     """Return the number of cpus, cores, and sockets on this machine"""
@@ -100,6 +129,12 @@ def get_gres_desc(include_gpu_types=False):
     else:
         return "Gres=" + ",".join(tokens)
 
+def get_features():
+    features = []
+    features += [get_cpu_model()]
+    features += list(set(get_gpu_names()))
+    return ",".join(features)
+
 def get_slurm_conf(include_gpu_types=False, include_hyperthreads=False):
     """Return a line describing this node's resources to put in slurm.conf"""
     cpu_info = get_cpu_info()
@@ -111,6 +146,7 @@ def get_slurm_conf(include_gpu_types=False, include_hyperthreads=False):
         "cores_per_socket" : cpu_info["cores"] / cpu_info["sockets"],
         "num_sockets" : cpu_info["sockets"],
         "memory" : get_mem_info(),
+        "feature" : get_features(),
         "gres" : get_gres_desc(include_gpu_types),
     }
     template = oneline("""\
@@ -121,6 +157,7 @@ def get_slurm_conf(include_gpu_types=False, include_hyperthreads=False):
         CoresPerSocket={cores_per_socket}
         Sockets={num_sockets}
         RealMemory={memory}
+        Feature={feature}
         {gres}
         State=UNKNOWN
     """)
