@@ -2,6 +2,7 @@
 import subprocess
 import re
 import itertools
+import argparse
 
 def max_in_col(data, col_id):
     """If data is a list of tuples, return the maximum """
@@ -28,7 +29,10 @@ def get_mem_info():
     if not m:
         return 0
     else:
-        return int(m.group(1)) / 1024
+        total_memory = int(m.group(1)) / 1024
+        # Nodes need to hold some memory in reserve for OS, etc
+        reserved = 0.05
+        return int(total_memory * (1 - reserved))
 
 def get_hostname():
     """Return this node's hostname"""
@@ -57,9 +61,6 @@ def get_gpu_names():
     except OSError:
         return []
 
-def get_phi_names():
-    """Not implemented"""
-    return []
 
 def get_gres_conf(include_gpu_types=False):
     """Return a list of lines for this node's gres.conf
@@ -91,20 +92,21 @@ def get_gres_desc(include_gpu_types=False):
         for gpu_type, group in itertools.groupby(sorted(gpus)):
             tokens.append("gpu:{}:{}".format(gpu_type, len(list(group))))
     else:
-        tokens.append("gpu:{}".format(len(gpus)))
+        if len(gpus) > 0:
+            tokens.append("gpu:{}".format(len(gpus)))
 
     if len(tokens) == 0:
         return ""
     else:
         return "Gres=" + ",".join(tokens)
 
-def get_slurm_conf(include_gpu_types=False):
+def get_slurm_conf(include_gpu_types=False, include_hyperthreads=False):
     """Return a line describing this node's resources to put in slurm.conf"""
     cpu_info = get_cpu_info()
     data = {
         "hostname" : get_hostname(),
         "ipaddr" : get_ipaddr(),
-        "cpus" : cpu_info["cpus"],
+        "cpus" : cpu_info["cpus"] if include_hyperthreads else cpu_info["cores"],
         "threads_per_core" : cpu_info["cpus"] / cpu_info["cores"],
         "cores_per_socket" : cpu_info["cores"] / cpu_info["sockets"],
         "num_sockets" : cpu_info["sockets"],
@@ -125,12 +127,21 @@ def get_slurm_conf(include_gpu_types=False):
     return template.format(**data)
 
 if __name__ == "__main__":
-    hostname = get_hostname()
-    include_gpu_types = False
-    print get_slurm_conf(include_gpu_types)
-    print get_gres_conf(include_gpu_types)
 
-    # with open("{}-slurm.conf".format(hostname), "w") as f:
-    #     f.write(get_slurm_conf() + "\n")
-    # with open("{}-gres.conf".format(hostname), "w") as f:
-    #     f.write(get_gres_conf() + "\n")
+    parser = argparse.ArgumentParser()
+    parser.add_argument("file", help="Which config file to generate: slurm.conf or gres.conf?")
+    parser.add_argument("--include-gpu-types", default=False, action="store_true", help="Emit the type field for each gpu")
+    parser.add_argument("--include-hyperthreads", default=False, action="store_true", help="Count each hyperthread as a separate CPU")
+    args = parser.parse_args()
+
+    if args.file == "slurm.conf":
+        print get_slurm_conf(
+            include_gpu_types=args.include_gpu_types,
+            include_hyperthreads=args.include_hyperthreads
+        )
+    elif args.file == "gres.conf":
+        print get_gres_conf(
+            include_gpu_types=args.include_gpu_types
+        )
+    else:
+        raise Exception("I don't know how to generate {}".format(args.file))
