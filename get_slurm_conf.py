@@ -3,6 +3,7 @@ import subprocess
 import re
 import itertools
 import argparse
+import functools
 
 def max_in_col(data, col_id):
     """If data is a list of tuples, return the maximum """
@@ -11,6 +12,32 @@ def max_in_col(data, col_id):
 def oneline(s):
     """Converts a multi-line string to one line and removes extra spaces"""
     return re.sub("[\s]+", " ", s).strip()
+
+def return_on_error(val):
+    """Decorator that makes a function return a default value instead of throwing an exception
+
+    Example:
+
+    @return_on_error("green")
+    def foo(x):
+        if x:
+            return "red"
+        else:
+            raise Exception("This will be caught and ignored")
+
+    foo(True)  # returns "red"
+    foo(False) # returns "green"
+
+    """
+    def val_decorator(func):
+        @functools.wraps(func)
+        def func_wrapper(*args, **kwargs):
+            try:
+                return func(*args, **kwargs)
+            except:
+                return val
+        return func_wrapper
+    return val_decorator
 
 def get_short_intel_model_name(model):
     """Shortens a full Intel processor description"""
@@ -28,6 +55,7 @@ def get_short_intel_model_name(model):
         model = family + "-" + number
     return model
 
+@return_on_error("UNKNOWN")
 def get_cpu_model():
     text = subprocess.check_output(["cat", "/proc/cpuinfo"])
     for line in text.splitlines():
@@ -41,6 +69,7 @@ def get_cpu_model():
             else:
                 return model
 
+@return_on_error({"cpus":1, "cores":1, "sockets":1})
 def get_cpu_info():
     """Return the number of cpus, cores, and sockets on this machine"""
     cpu_text = subprocess.check_output(["lscpu", "--parse=cpu,core,socket"])
@@ -51,6 +80,7 @@ def get_cpu_info():
         "sockets" : max_in_col(rows, 2) + 1,
     }
 
+@return_on_error("0")
 def get_mem_info():
     """Return the total amount of RAM on this system, in MiB"""
     text = subprocess.check_output(["cat", "/proc/meminfo"])
@@ -63,10 +93,12 @@ def get_mem_info():
         reserved = 0.05
         return int(total_memory * (1 - reserved))
 
+@return_on_error("UNKNOWN")
 def get_hostname():
     """Return this node's hostname"""
     return subprocess.check_output("hostname").splitlines()[0].split(".")[0]
 
+@return_on_error("0.0.0.0")
 def get_ipaddr():
     """Return this node's IP address"""
     interfaces = ["eno1", "eno2"]
