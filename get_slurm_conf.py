@@ -102,16 +102,11 @@ def get_hostname():
 
 @return_on_error("0.0.0.0")
 def get_ipaddr():
-    """Return this node's IP address"""
-    interfaces = ["eno1", "eno2"]
-    for interface in interfaces:
-        text = subprocess.check_output(["ip", "-o", "-4", "addr", "show", "dev", interface])
-        if not text:
-            continue
-        else:
-            return text.split()[3].split("/")[0]
-    else:
-        return "0.0.0.0"
+    hostname = get_hostname()
+    text = subprocess.check_output(["host", "-4", hostname])
+    # Returned text has this format:
+    #   host has address 0.0.0.0
+    return text.strip().split(" ")[3]
 
 def get_gpu_names():
     """Return a list of names of GPU's on this node"""
