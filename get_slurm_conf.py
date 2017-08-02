@@ -197,7 +197,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("file", help="Which config file to generate: slurm.conf or gres.conf?")
     parser.add_argument("--include-gpu-types", default=False, action="store_true", help="Emit the type field for each gpu")
-    parser.add_argument("--include-hyperthreads", default=False, action="store_true", help="Count each hyperthread as a separate CPU")
+    parser.add_argument("--include-hyperthreads", default=True, action="store_true", help="Count each hyperthread as a separate CPU")
     args = parser.parse_args()
 
     if args.file == "slurm.conf":
