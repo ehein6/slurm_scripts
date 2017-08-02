@@ -55,19 +55,21 @@ def get_short_intel_model_name(model):
         model = family + "-" + number
     return model
 
+def get_short_power_model_name(model):
+    return model.strip().replace(" ", "-")
+
 @return_on_error("UNKNOWN")
 def get_cpu_model():
     text = subprocess.check_output(["cat", "/proc/cpuinfo"])
     for line in text.splitlines():
         # Look for model name
-        if line.startswith("model name"):
+        if line.startswith("model name") or line.startswith("machine"):
             # Grab processor description
             model = line.split(":")[1]
             if model.startswith(" Intel"):
                 return get_short_intel_model_name(model)
-            # TODO parse Power8
-            else:
-                return model
+            elif model.startswith(" Power"):
+                return get_short_power_model_name(model)
 
 @return_on_error({"cpus":1, "cores":1, "sockets":1})
 def get_cpu_info():
